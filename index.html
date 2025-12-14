@@ -101,6 +101,7 @@
             width: 100%;
         }
         button {
+            /* Remove margin-top for inlined buttons */
             margin-top: 0;
             padding: 10px 20px;
             font-size: 16px;
@@ -148,8 +149,8 @@
         .presets-list {
             display: flex;
             gap: 10px;
-            flex-wrap: wrap; 
-            justify-content: center; 
+            flex-wrap: wrap; /* allow wrapping */
+            justify-content: center; /* center items */
         }
         .preset-preview {
             display: grid;
@@ -670,53 +671,20 @@
             return pattern;
         }
 
-        // Cache for pattern lookups: { patternKey: [matchingWords] }
-        const patternCache = {};
-
-        // Optimized function: cache and only brute-force single non-green positions
         function findWordsForPatternWithTarget(pattern, wordList, availableColours, targetWord) {
             let guesses = [];
             for (let row = 0; row < 6; row++) {
-                const gridPat = pattern[row];
-                const patKey = gridPat.join('');
-                // Use cache if available
-                if (!patternCache[patKey]) {
-                    // Count non-green positions
-                    let nonGreenIdxs = [];
-                    for (let i = 0; i < 5; i++) {
-                        if (gridPat[i] !== 2) nonGreenIdxs.push(i);
+                let found = false;
+                for (let guess of wordList) {
+                    let pat = getWordlePattern(targetWord, guess).map(c => c);
+                    let gridPat = pattern[row];
+                    if (pat.join('') === gridPat.join('')) {
+                        guesses.push(guess);
+                        found = true;
+                        break;
                     }
-                    let matches = [];
-                    if (nonGreenIdxs.length === 1) {
-                        // Only one non-green: try all possible letters in that position
-                        const idx = nonGreenIdxs[0];
-                        for (let ch = 97; ch <= 122; ch++) {
-                            let guessArr = targetWord.split('');
-                            guessArr[idx] = String.fromCharCode(ch);
-                            let guess = guessArr.join('');
-                            if (wordList.includes(guess)) {
-                                let pat = getWordlePattern(targetWord, guess);
-                                if (pat.join('') === patKey) {
-                                    matches.push(guess);
-                                }
-                            }
-                        }
-                    } else {
-                        // Fallback: brute-force all words
-                        for (let guess of wordList) {
-                            let pat = getWordlePattern(targetWord, guess);
-                            if (pat.join('') === patKey) {
-                                matches.push(guess);
-                            }
-                        }
-                    }
-                    patternCache[patKey] = matches;
                 }
-                // Use cached matches
-                const matches = patternCache[patKey];
-                if (matches.length > 0) {
-                    guesses.push(matches[0]);
-                } else {
+                if (!found) {
                     return null;
                 }
             }
@@ -855,10 +823,16 @@
         // Find up to maxCount words that would produce a successful output for the current pattern
         function findDefiniteWordsForPattern(pattern, wordList, availableColours, maxCount = 10) {
             let definite = [];
+            let count = 0;
+            const startTime = Date.now();
+            const TIME_LIMIT_MS = 1000; // 1 second
             for (let word of wordList) {
+                if (Date.now() - startTime > TIME_LIMIT_MS) {
+                    break; 
+                }
                 if (findWordsForPatternWithTarget(pattern, wordList, availableColours, word)) {
                     definite.push(word);
-                    if (definite.length >= maxCount) break;
+                    count++;
                 }
             }
             return definite;
@@ -890,6 +864,7 @@
         window.addEventListener('resize', updatePresetsCollapse);
         window.addEventListener('DOMContentLoaded', updatePresetsCollapse);
 
+        // Trigger generate on Enter in input
         document.getElementById('title').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 document.getElementById('generateBtn').click();
